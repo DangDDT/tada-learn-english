@@ -1,0 +1,21 @@
+github.com/DangDDT/tada-learn-english/backend v0.0.0-00010101000000-000000000000
+github.com/go-chi/chi/v5 v5.3.1 h1:5H7cGdiS/gM6SUjXD9rnXrVudf0bw01l8MlT/j9t/hs=
+github.com/go-chi/chi/v5 v5.3.1/go.mod h1:47Hz5Th5hCiS3IhhLbI04V1LMj0g1X0E7/T/5hDiS0E=
+github.com/go-chi/cors v1.2.2 h1:jXgy7xclR0J6cpQ6s2B8oaGs2y7vkRfc0eM5JF6JN8I=
+github.com/go-chi/cors v1.2.2/go.mod h1:8wQVwBgySYEpsR/hP2DyE1bZRYx/1NhHak3yI5WYj3o=
+github.com/golang-jwt/jwt/v5 v5.3.1 h1:o5R4CSn7QjW05B/rNcLi7izMY3hg/WsXkHm04UWMTqs=
+github.com/golang-jwt/jwt/v5 v5.3.1/go.mod h1:o22zNUqM1qW4NXE4Xb6whXUJJoCwnA1+B/MlRCmE0M=
+github.com/jackc/pgpassfile v1.0.0 h1:/aPMH5VfP65w5SjVTuP/sY9ASxQx0QZcPvSmUQf1rLs=
+github.com/jackc/pgpassfile v1.0.0/go.mod h1:AeWmIxw7YAJIAKUYEOCYEiDri8gMH0kCbE3TEBsOBag=
+github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 h1:iCEnooeoKf/IOeAYFi+wQDKJRAm7q5Qq4nOBaMGmmGo=
+github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761/go.mod h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM=
+github.com/jackc/pgx/v5 v5.10.0 h1:ysB0n1thfRkM2lbOaOJ5l/ULvMdHd3L8MTjPKC7fDCE=
+github.com/jackc/pgx/v5 v5.10.0/go.mod h1:IDpBuc9OoJfXjUnjLq3HFuBEBr4G4E5Hn+K8gFTIqwM=
+github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+Ekbd7SR2BFZ5hLylG2BmTlkqB4FjVAE3gmL+A=
+github.com/jackc/puddle/v2 v2.2.2/go.mod h1:1bp4y4oSGnJEHDHEMGC3uHqG4R7Z43MCM5LMFECuzSg=
+golang.org/x/crypto v0.54.0 h1:KE3I3m2UPA62CyX7SBV/BdKJ8n0rA5BS7OaY3fF5nYc=
+golang.org/x/crypto v0.54.0/go.mod h1:Ojsh1VYb6+4ay4xs8Q7nnY1TWtlj9L6x04TKFPiyJZo=
+golang.org/x/sync v0.22.0 h1:JY8l2GPCmXHfcG2rFpZ7K8rQaYPgL8bYfWPI2WZZ0Kk=
+golang.org/x/sync v0.22.0/go.mod h1:9w2Ncm0CR41UqOh1LptqXYhiJF0H7aF5fjDm2a/n3kY=
+golang.org/x/text v0.40.0 h1:byS1mFFTQQDYj9eOCFKQubI1J9q3C1CnwFjRIP4wOTQ=
+golang.org/x/text v0.40.0/go.mod h1:zUbNWJuLh6RLBmKQ/bHymdKhFsrbDNmwr4AAhMh3e2E=
