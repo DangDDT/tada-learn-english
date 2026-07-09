@@ -1,0 +1,13 @@
+{
+  "version": "1",
+  "name": "Tada Learn English API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ],
+  "scripts": {},
+  "vars": {},
+  "headers": [],
+  "auth": {}
+}

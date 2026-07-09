@@ -1,0 +1,28 @@
+put {
+  url: {{base_url}}/api/v1/words/{{word_id}}
+  body: json
+  auth: bearer {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "meaning": "sự tình cờ may mắn (updated)",
+    "cefr_level": "C2"
+  }
+}
+
+docs {
+  Update word fields (partial update supported).
+}
+
+tests {
+  function onResponse(req, res) {
+  expect(res.status).to.equal(200);
+expect(res.body.data.meaning).to.equal('sự tình cờ may mắn (updated)');
+expect(res.body.data.cefr_level).to.equal('C2');
+  }
+}

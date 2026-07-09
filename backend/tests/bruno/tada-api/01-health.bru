@@ -1,0 +1,18 @@
+get {
+  url: {{base_url}}/api/v1/health
+  body: none
+  auth: none
+}
+
+docs {
+  Public health endpoint. No auth required.
+}
+
+tests {
+  function onResponse(req, res) {
+  expect(res.status).to.equal(200);
+expect(res.body.status).to.equal('ok');
+expect(res.body.db).to.equal('connected');
+expect(res.body.version).to.be.a('string');
+  }
+}

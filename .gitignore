@@ -1,0 +1,6 @@
+
+# OpenCode session artifacts
+.omo/
+.opencode/
+results.json
+backend/server

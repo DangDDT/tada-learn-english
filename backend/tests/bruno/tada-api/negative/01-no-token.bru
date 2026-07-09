@@ -1,0 +1,14 @@
+get {
+  url: {{base_url}}/api/v1/words
+  auth: none
+}
+
+docs {
+  Access protected route WITHOUT token. Expect 401.
+}
+
+tests {
+  function onResponse(req, res) {
+  expect(res.status).to.equal(401);
+  }
+}

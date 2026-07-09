@@ -1,0 +1,73 @@
+name: Bruno API Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bruno-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tada
+          POSTGRES_PASSWORD: tada_password
+          POSTGRES_DB: tada_learn_english
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install Bruno CLI
+        run: npm install -g @usebruno/cli
+
+      - name: Start backend
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: tada
+          DB_PASSWORD: tada_password
+          DB_NAME: tada_learn_english
+          DB_SSLMODE: disable
+          JWT_SECRET: test_secret_key_for_ci
+          PORT: 8080
+        run: |
+          go mod download
+          go build -o /tmp/backend-server ./cmd/server
+          /tmp/backend-server &
+          # Wait for health endpoint
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
+              echo "Backend is up!"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run Bruno tests
+        working-directory: backend/tests/bruno/tada-api
+        run: bru run --env local
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bruno-results
+          path: backend/tests/bruno/tada-api/results.json

@@ -1,0 +1,43 @@
+post {
+  url: {{base_url}}/api/v1/words
+  body: json
+  auth: bearer {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "word": "serendipity",
+    "pronunciation": "ˌserənˈdɪpəti",
+    "ipa": "/ˌsɛrənˈdɪpəti/",
+    "meaning": "sự tình cờ may mắn",
+    "part_of_speech": "noun",
+    "example_sentences": ["Finding this tool was pure serendipity."],
+    "cefr_level": "C1",
+    "tags": ["positive", "advanced"]
+  }
+}
+
+docs {
+  Create a new word. Requires Bearer token.
+}
+
+tests {
+  function onResponse(req, res) {
+  expect(res.status).to.equal(201);
+expect(res.body.success).to.equal(true);
+expect(res.body.data.word).to.equal('serendipity');
+expect(res.body.data.meaning).to.equal('sự tình cờ may mắn');
+expect(res.body.data.cefr_level).to.equal('C1');
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body && body.data && body.data.id) {
+    bru.setVar("word_id", body.data.id);
+  }
+}

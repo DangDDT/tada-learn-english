@@ -1,0 +1,38 @@
+post {
+  url: {{base_url}}/api/v1/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{test_email}}",
+    "password": "{{test_password}}",
+    "name": "Test User"
+  }
+}
+
+script:pre-request {
+  bru.setVar("test_email", "test_user_" + Date.now() + "@tada.test")
+}
+
+docs {
+  Registers a new user. Saves user_id to collection vars via test script.
+}
+
+tests {
+  function onResponse(req, res) {
+  expect(res.status).to.equal(201);
+expect(res.body.success).to.equal(true);
+expect(res.body.data.id).to.be.a('string');
+expect(res.body.data.email).to.equal(bru.getVar('test_email'));
+  }
+}
+
+script:post-response {
+  bru.setVar("user_id", res.getBody().data.id)
+}

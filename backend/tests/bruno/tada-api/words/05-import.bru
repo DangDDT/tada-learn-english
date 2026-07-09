@@ -1,0 +1,17 @@
+post {
+  url: {{base_url}}/api/v1/words/import
+  body: multipart-form
+  auth: bearer  {{access_token}}
+}
+
+docs {
+  Import words from CSV file.
+}
+
+tests {
+  function onResponse(req, res) {
+  expect(res.status).to.equal(200);
+expect(res.body.success).to.equal(true);
+expect(res.body.data).to.have.property('imported');
+  }
+}

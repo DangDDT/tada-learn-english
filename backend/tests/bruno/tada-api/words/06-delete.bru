@@ -1,0 +1,14 @@
+delete {
+  url: {{base_url}}/api/v1/words/{{word_id}}
+  auth: bearer  {{access_token}}
+}
+
+docs {
+  Delete word by id. Returns 204 No Content.
+}
+
+tests {
+  function onResponse(req, res) {
+  expect(res.status).to.equal(204);
+  }
+}

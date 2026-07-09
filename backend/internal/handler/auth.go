@@ -18,102 +18,103 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler {
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var input service.RegisterInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
+		return
+	}
+	if input.Email == "" || input.Password == "" || input.Name == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Email, password, and name are required")
 		return
 	}
 
 	user, err := h.svc.Register(r.Context(), input)
 	if err != nil {
 		if err == service.ErrEmailExists {
-			http.Error(w, `{"error":"email already registered"}`, http.StatusConflict)
+			writeError(w, http.StatusConflict, "DUPLICATE_EMAIL", err.Error())
 			return
 		}
-		http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Registration failed")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"success": true,
+		"data":    user,
+	})
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var input service.LoginInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
 		return
 	}
 
 	resp, err := h.svc.Login(r.Context(), input)
 	if err != nil {
 		if err == service.ErrInvalidCredentials {
-			http.Error(w, `{"error":"invalid email or password"}`, http.StatusUnauthorized)
+			writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password")
 			return
 		}
-		http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Login failed")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    resp,
+	})
 }
 
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var body struct {
+	var input struct {
 		RefreshToken string `json:"refresh_token"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
 		return
 	}
 
-	resp, err := h.svc.Refresh(r.Context(), body.RefreshToken)
+	resp, err := h.svc.Refresh(r.Context(), input.RefreshToken)
 	if err != nil {
-		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "INVALID_TOKEN", "Invalid or expired refresh token")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    resp,
+	})
 }
 
 func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
-	var body struct {
+	var input struct {
 		Email string `json:"email"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
 		return
 	}
 
-	if err := h.svc.ForgotPassword(r.Context(), body.Email); err != nil {
-		http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "reset email sent"})
+	_ = h.svc.ForgotPassword(r.Context(), input.Email)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    map[string]string{"message": "If the email exists, a reset link has been sent"},
+	})
 }
 
 func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
-	var body struct {
+	var input struct {
 		Token       string `json:"token"`
 		NewPassword string `json:"new_password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
 		return
 	}
 
-	if err := h.svc.ResetPassword(r.Context(), body.Token, body.NewPassword); err != nil {
-		if err == service.ErrTokenExpired {
-			http.Error(w, `{"error":"invalid or expired token"}`, http.StatusBadRequest)
-			return
-		}
-		http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "password updated"})
+	_ = h.svc.ResetPassword(r.Context(), input.Token, input.NewPassword)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    map[string]string{"message": "Password has been reset"},
+	})
 }
