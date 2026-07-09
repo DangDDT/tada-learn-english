@@ -37,6 +37,16 @@ jobs:
       - name: Install Bruno CLI
         run: npm install -g @usebruno/cli
 
+      - name: Run database migrations
+        working-directory: backend
+        env:
+          PGPASSWORD: tada_password
+        run: |
+          for f in db/migrations/*.up.sql; do
+            echo "Applying $f"
+            psql "host=localhost port=5432 user=tada dbname=tada_learn_english" -f "$f"
+          done
+
       - name: Start backend
         working-directory: backend
         env:
