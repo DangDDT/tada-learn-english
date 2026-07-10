@@ -205,17 +205,19 @@ func (s *WordService) List(ctx context.Context, params WordListParams) (*WordLis
 		return nil, err
 	}
 
+	meta := struct {
+		Page    int `json:"page"`
+		PerPage int `json:"per_page"`
+		Total   int `json:"total"`
+	}{
+		Page:    params.Page,
+		PerPage: params.PerPage,
+		Total:   total,
+	}
+
 	return &WordListResponse{
 		Words: words,
-		Meta: struct {
-			Page    int ` + "`" + `json:"page"` + "`" + `
-			PerPage int ` + "`" + `json:"per_page"` + "`" + `
-			Total   int ` + "`" + `json:"total"` + "`" + `
-		}{
-			Page:    params.Page,
-			PerPage: params.PerPage,
-			Total:   total,
-		},
+		Meta:  meta,
 	}, nil
 }
 
