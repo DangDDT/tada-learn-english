@@ -22,7 +22,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.Email == "" || input.Password == "" || input.Name == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Email, password, and name are required")
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Email, password, name required")
 		return
 	}
 
