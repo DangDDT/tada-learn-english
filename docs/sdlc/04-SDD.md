@@ -3,12 +3,15 @@
 ## Tada Learn English
 
 | Field | Value |
-|---|---|
-| **Version** | 1.0.0 |
+|-------|-------|
+| **Version** | 1.0.1 |
+| **Last Updated** | 2026-07-10 |
+| **Related** | [PRD](00-PRD.md), [SRS](01-SRS.md), [API Spec](03-API-Spec.md) |
 
 ## 1. Architecture Overview
 
 ### Deployment Architecture
+
 ```mermaid
 graph TB
     subgraph "VPS (dangddt.io.vn)"
@@ -26,57 +29,108 @@ graph TB
 ```
 
 ### Component Architecture
+
 ```mermaid
 graph TB
-    subgraph "Next.js Frontend"
-        PAGES[Pages: Dashboard, Words, Study, Games]
+    subgraph "Next.js Frontend (planned Sprint 2)"
+        PAGES[Pages: Auth, Words, Study, Games]
         RQ[React Query — Server State]
-        ZS[Zustand — UI State]
         API[API Client]
     end
     subgraph "Go Backend"
         ROUTER[chi Router]
         MW[JWT Auth Middleware]
-        H[Handlers: Auth, Words, SRS, Stats]
-        S[Services: Auth, Words, SRS, Stats]
-        Q[sqlc Queries]
+        H[Handlers: auth, words, health, swagger]
+        S[Services: auth, words]
+        Q[pgx Queries]
     end
-    RQ --> API --> ROUTER --> MW --> H --> S --> Q
+    subgraph "Database"
+        DB[(PostgreSQL 16)]
+    end
+    API --> ROUTER --> MW --> H --> S --> Q --> DB
 ```
 
 ## 2. Backend Design (Go)
 
-### Project Structure
+### Project Structure (Actual)
+
 ```
 backend/
-├── cmd/server/main.go       # Entry point
+├── cmd/server/main.go            # Entry point
 ├── internal/
-│   ├── config/config.go      # Env loading
+│   ├── config/config.go           # Env loading (JWT secret, DB URL, port)
 │   ├── middleware/
-│   │   ├── auth.go           # JWT validation
-│   │   ├── cors.go           # CORS
-│   │   └── ratelimit.go      # Rate limiting
+│   │   └── auth.go                # JWT validation middleware
 │   ├── handler/
-│   │   ├── auth.go           # Auth endpoints
-│   │   ├── words.go          # Word CRUD
-│   │   ├── srs.go            # SRS review/queue
-│   │   └── stats.go          # Dashboard
+│   │   ├── auth.go                # Auth endpoints (register, login, refresh, forgot/reset)
+│   │   ├── health.go              # Health check endpoint
+│   │   ├── swagger.go             # Swagger UI handler
+│   │   └── words.go               # Word CRUD endpoints
 │   ├── service/
-│   │   ├── auth.go           # Business logic
-│   │   ├── words.go
-│   │   └── srs.go            # SM-2 algorithm
+│   │   ├── auth.go                # Auth business logic (register, login, JWT, password reset)
+│   │   └── words.go               # Word business logic (CRUD, search, import)
 │   └── model/
-│       ├── word.go
-│       └── user.go
+│       └── models.go              # All data models (User, Word, WordWithSRS, SRSState)
 ├── db/
-│   ├── migrations/           # SQL files
-│   └── queries/              # sqlc queries
+│   └── migrations/
+│       └── 000002_password_reset_tokens.{up,down}.sql
+├── tests/
+│   └── bruno/                     # Bruno API test collection
 ├── Dockerfile
 ├── go.mod
 └── go.sum
 ```
 
-### SRS Algorithm (SM-2 Based)
+### Future Structure (Post-Sprint 2)
+
+```
+backend/
+├── internal/
+│   ├── handler/
+│   │   ├── auth.go                # + forgot/reset endpoints
+│   │   ├── words.go               # + import endpoint
+│   │   ├── srs.go                 # NEW: SRS review/queue/stats
+│   │   ├── study.go               # NEW: flashcard, quiz
+│   │   └── stats.go               # NEW: dashboard, CEFR, export
+│   ├── service/
+│   │   ├── srs.go                 # NEW: SM-2 algorithm
+│   │   ├── study.go               # NEW: flashcard, quiz logic
+│   │   └── stats.go               # NEW: analytics
+│   └── model/
+│       └── models.go              # Extended models
+```
+
+### Layered Architecture
+
+```
+Handler (HTTP) → Service (Business Logic) → pgx (Database)
+     │                    │                        │
+     │                    │                        │
+  Input validation    SM-2 algorithm          Parameterized SQL
+  HTTP parsing        Auth logic              Connection pool
+  Response format     Error handling          Transactions
+```
+
+### Error Handling Strategy
+
+```
+Custom error types:
+  - ErrWordNotFound    → 404 NOT_FOUND
+  - ErrWordDuplicate   → 409 CONFLICT
+  - ErrInvalidInput    → 400 BAD_REQUEST
+  - ErrUnauthorized    → 401 UNAUTHORIZED
+  - ErrForbidden       → 403 FORBIDDEN
+
+Unified JSON response:
+  {
+    "success": false,
+    "error": { "code": "NOT_FOUND", "message": "Word not found" },
+    "data": null
+  }
+```
+
+### SRS Algorithm (SM-2 Based — Planned Sprint 2)
+
 ```mermaid
 flowchart TD
     START([User reviews word])
@@ -92,124 +146,224 @@ flowchart TD
     RATING -->|hard| HARD --> UPDATE
 ```
 
-**Band intervals:** new (1d) → learning (3d) → reviewing (7d) → mature (14d) → mastered (30d)
+**Band intervals:**
 
-## 3. Frontend Design (Next.js 14)
+| Band | Interval | Promote To | Demote To |
+|------|----------|------------|-----------|
+| New | 1 day | Learning | — |
+| Learning | 3 days | Reviewing | New |
+| Reviewing | 7 days | Mature | Learning |
+| Mature | 14 days | Mastered | Reviewing |
+| Mastered | 30 days | — | Mature |
+
+**Interval multiplier by rating:**
+- Easy: ×2.5 (promote band)
+- Medium: ×1.0 (stay band)
+- Hard: ×0.5 (demote band)
+
+## 3. Frontend Design (Next.js 14 — Planned Sprint 2)
 
 ### Route Structure (App Router)
+
 ```
 src/app/
-├── layout.tsx                  # Root layout
-├── page.tsx                    # Dashboard
-├── (auth)/login/page.tsx       # Login
-├── (auth)/register/page.tsx    # Register
+├── layout.tsx                    # Root layout
+├── page.tsx                      # Redirect to dashboard
+├── (auth)/
+│   ├── login/page.tsx
+│   ├── register/page.tsx
+│   └── forgot-password/page.tsx
 ├── (dashboard)/
-│   ├── layout.tsx              # Auth layout + sidebar
+│   ├── layout.tsx                # Auth guard + sidebar
+│   ├── page.tsx                  # Dashboard home
 │   ├── words/
-│   │   ├── page.tsx            # Word list + search
-│   │   ├── [id]/page.tsx       # Word detail + edit
-│   │   ├── add/page.tsx        # Add new word
-│   │   └── import/page.tsx     # CSV import
+│   │   ├── page.tsx              # Word list + search
+│   │   ├── new/page.tsx          # Add word form
+│   │   ├── [id]/page.tsx         # Word detail + edit
+│   │   └── import/page.tsx       # CSV import
 │   ├── study/
-│   │   ├── page.tsx            # Study mode selector
-│   │   ├── flashcard/page.tsx  # Flashcard mode
-│   │   └── quiz/page.tsx       # Quiz mode
-│   ├── games/
-│   │   ├── word-chain/page.tsx
-│   │   ├── word-builder/page.tsx
-│   │   └── unscramble/page.tsx
-│   └── stats/page.tsx          # Progress dashboard
+│   │   ├── page.tsx              # Mode selector
+│   │   ├── flashcard/page.tsx
+│   │   └── quiz/page.tsx
+│   └── stats/page.tsx            # Progress dashboard
 ├── components/
-│   ├── ui/                     # shadcn/ui
-│   ├── words/                  # WordCard, SearchBar
-│   └── study/                  # FlashcardDeck, QuizQuestion
+│   ├── ui/                       # shadcn/ui primitives
+│   ├── words/                    # WordCard, SearchBar, WordForm
+│   └── study/                    # FlashcardDeck, QuizQuestion
 ├── lib/
-│   ├── api-client.ts           # Typed API client
-│   └── auth.ts                 # NextAuth config
+│   ├── api-client.ts             # Typed fetch wrapper
+│   └── utils.ts                  # Shared utilities
 └── hooks/
     ├── use-words.ts
-    ├── use-srs.ts
-    └── use-stats.ts
+    ├── use-auth.ts
+    └── use-srs.ts
 ```
 
 ### State Management
-- **Server State:** React Query for API data (words, SRS queue, stats)
-- **Client State:** Zustand for UI (sidebar, theme, search query, study session)
-- **Auth State:** NextAuth.js (useSession hook)
 
-## 4. Data Flows
+| State Type | Tool | What It Manages |
+|------------|------|-----------------|
+| Server State | React Query (TanStack Query) | Words list, SRS queue, stats — auto-cached, auto-refresh |
+| Client State | Zustand | Sidebar, theme, search filters, study session state |
+| Auth State | NextAuth.js | Session, JWT, login/logout |
 
-### Add Word Flow
-```mermaid
-sequenceDiagram
-    U->>FE: Fill form, click Save
-    FE->>FE: Client validation
-    FE->>BE: POST /api/v1/words
-    BE->>BE: JWT + request validation
-    BE->>DB: INSERT INTO words
-    BE->>DB: INSERT INTO srs_states (band: new)
-    DB-->>BE: records
-    BE-->>FE: 201 + word object
-    FE->>U: Success toast + redirect
+### API Client Design
+
+```typescript
+// lib/api-client.ts
+const api = {
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  
+  async request<T>(method: string, path: string, body?: any): Promise<T> {
+    const res = await fetch(`${this.baseURL}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.accessToken}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.json());
+    return res.json();
+  },
+  
+  words: {
+    list: (params) => api.get('/api/v1/words', params),
+    create: (data) => api.post('/api/v1/words', data),
+    // ...
+  },
+  // ...
+};
 ```
 
-### SRS Review Flow
+## 4. Backend Data Flows
+
+### Add Word Flow (Implemented)
+
 ```mermaid
 sequenceDiagram
-    U->>FE: Open Study mode
-    FE->>BE: GET /api/v1/srs/queue
-    BE->>DB: SELECT due words
-    DB-->>BE: queue
-    BE-->>FE: 20 words
-    loop each word
-        FE->>U: Show word (flashcard front)
-        U->>FE: Tap → flip
-        FE->>U: Meaning + audio
-        U->>FE: Rate Easy/Medium/Hard
-        FE->>BE: POST /api/v1/srs/review
-        BE->>BE: Calculate next review
-        BE->>DB: UPDATE srs_states
-    end
-    FE->>U: Session summary
+    participant C as Client
+    participant H as Handler
+    participant S as Service
+    participant DB as PostgreSQL
+
+    C->>H: POST /api/v1/words { word, meaning, ... }
+    H->>H: Validate input
+    H->>H: Extract user_id from JWT
+    H->>S: Create(userID, input)
+    S->>DB: INSERT INTO words
+    DB-->>S: word record
+    S-->>H: word
+    H-->>C: 201 { success: true, data: word }
+```
+
+### SRS Review Flow (Planned Sprint 2)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant H as Handler
+    participant S as SRS Service
+    participant DB as PostgreSQL
+
+    C->>H: GET /api/v1/srs/queue
+    H->>S: GetQueue(userID, limit)
+    S->>DB: SELECT due words
+    DB-->>S: queue
+    S-->>H: queue
+    H-->>C: 200 { data: { due_count, queue } }
+
+    Note over C,DB: Flashcard loop
+
+    C->>H: POST /api/v1/srs/review { word_id, rating }
+    H->>S: Review(userID, wordID, rating)
+    S->>S: Calculate new band & interval
+    S->>DB: UPDATE srs_states
+    S->>DB: INSERT INTO srs_reviews
+    DB-->>S: updated state
+    S-->>H: state
+    H-->>C: 200 { data: { new_band, next_review_at } }
 ```
 
 ## 5. Security Design
-- JWT: HS256, access token 1h, refresh token 7d
-- Passwords: bcrypt cost factor 12
-- SQL injection: sqlc parameterized queries
-- CORS: restricted to frontend origin
-- Rate limiting: 100 req/min auth'd, 10 req/min unauth'd
-- HTTPS via Nginx Proxy Manager + Cloudflare Full SSL
 
-## 6. Docker Compose
+| Concern | Implementation | Status |
+|---------|---------------|--------|
+| Authentication | JWT HS256, access 1h, refresh 7d | ✅ Implemented |
+| Password storage | bcrypt cost factor 12 | ✅ Implemented |
+| SQL injection | pgx parameterized queries (no string concat) | ✅ Implemented |
+| CORS | chi/cors middleware, restricted origin | ✅ Implemented |
+| HTTPS | Nginx PM + Cloudflare Full SSL | 🔜 OPS Sprint |
+| Rate limiting | Per-IP + per-user token bucket | 🔜 Sprint 3 |
+| Secrets | JWT_SECRET via env, never in repo | ✅ Enforced |
+
+## 6. Logging & Observability
+
+| Concern | Approach |
+|---------|----------|
+| Application logs | Structured JSON logging (log/slog) to stdout |
+| Request logging | chi middleware logging method, path, duration, status |
+| Health check | `GET /api/v1/health` returns DB connectivity status |
+| Error tracking | Unified error handler with error codes |
+| Monitoring | `docker stats` for resource usage (MVP) |
+
+## 7. Docker Compose
+
 ```yaml
 services:
   frontend:
     build: ./frontend
     ports: ["3000:3000"]
-    environment:
-      - NEXT_PUBLIC_API_URL=https://api.tada-english.dangddt.io.vn
+    env_file: .env
+    depends_on: [backend]
   backend:
     build: ./backend
     ports: ["8080:8080"]
-    environment:
-      - DATABASE_URL=postgres://tada:pass@db:5432/tada_english
-      - JWT_SECRET=${JWT_SECRET}
+    env_file: .env
     depends_on:
-      db: {condition: service_healthy}
+      db: { condition: service_healthy }
   db:
     image: pgvector/pgvector:pg16
     ports: ["5432:5432"]
-    environment:
-      - POSTGRES_USER=tada
-      - POSTGRES_DB=tada_english
+    env_file: .env
     volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tada"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
 ```
 
-## 7. Nginx Routes
+## 8. CI/CD Pipeline
+
+### GitHub Actions Workflow
+
+```
+Trigger: push/PR to main
+  1. Checkout code
+  2. Run DB migrations (PostgreSQL service container)
+  3. Start backend
+  4. Run Bruno API tests
+  5. (Future) Run Go unit tests
+  6. (Future) Run golangci-lint
+```
+
+### Release Process
+
+```
+1. Feature branch → PR → CI passes → Merge to main
+2. Tag: v<major>.<minor>.<patch> (semver)
+3. GitHub Actions builds Docker images
+4. Deploy via `docker compose up -d` on VPS
+5. Health check verifies deployment
+```
+
+## 9. Nginx Routes
+
 | Domain | Target |
-|---|---|
-| tada-english.dangddt.io.vn | localhost:3000 |
-| api.tada-english.dangddt.io.vn | localhost:8080 |
+|--------|--------|
+| tada-english.dangddt.io.vn | localhost:3000 (Next.js) |
+| api.tada-english.dangddt.io.vn | localhost:8080 (Go) |
