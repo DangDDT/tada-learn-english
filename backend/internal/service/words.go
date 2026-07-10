@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrWordNotFound  = errors.New("word not found")
+	ErrWordNotFound = errors.New("word not found")
 	ErrWordDuplicate = errors.New("word exists")
 )
 
@@ -121,7 +121,7 @@ func (s *WordService) Create(ctx context.Context, userID string, input CreateWor
 		return nil, err
 	}
 
-	if err = tx.Commit(ctx); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 	return word, nil
@@ -153,89 +153,97 @@ func (s *WordService) List(ctx context.Context, params WordListParams) (*WordLis
 		argIdx++
 	}
 
-	var total int
+	if params.SortBy == "" {
+		params.SortBy = "created_at"
+	}
+	if params.SortDir == "" {
+		params.SortDir = "DESC"
+	}
+	validSorts := map[string]bool{"created_at": true, "updated_at": true, "word": true, "cefr_level": true}
+	if !validSorts[params.SortBy] {
+		params.SortBy = "created_at"
+	}
+	if params.SortDir != "ASC" && params.SortDir != "DESC" {
+		params.SortDir = "DESC"
+	}
+
 	countQuery := "SELECT COUNT(*) FROM words w LEFT JOIN srs_states s ON s.word_id = w.id AND s.user_id = w.user_id WHERE " + strings.Join(where, " AND ")
+	total := 0
 	err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
 		return nil, err
 	}
 
-	sortBy := "w.created_at"
-	sortDir := "DESC"
-	if params.SortBy == "word" {
-		sortBy = "w.word"
-	} else if params.SortBy == "last_reviewed_at" {
-		sortBy = "s.last_reviewed_at"
-	}
-	if params.SortDir == "asc" {
-		sortDir = "ASC"
-	}
-
-	if params.Page < 1 {
-		params.Page = 1
-	}
-	if params.PerPage < 1 {
-		params.PerPage = 20
-	}
 	offset := (params.Page - 1) * params.PerPage
+	limitArg := "$" + itos(argIdx)
+	args = append(args, params.PerPage)
+	argIdx++
+	offsetArg := "$" + itos(argIdx)
+	args = append(args, offset)
 
-	query := "SELECT w.id, w.word, w.pronunciation, w.ipa, w.meaning, w.part_of_speech,\n\t\tw.example_sentences, w.cefr_level, w.tags, w.created_at, w.updated_at,\n\t\tCOALESCE(s.band, 'new'), COALESCE(s.times_reviewed, 0),\n\t\ts.last_reviewed_at, s.next_review_at\n\t\tFROM words w\n\t\tLEFT JOIN srs_states s ON s.word_id = w.id AND s.user_id = w.user_id\n\t\tWHERE " + strings.Join(where, " AND ") + "\n\t\tORDER BY " + sortBy + " " + sortDir + "\n\t\tLIMIT $" + itos(argIdx) + " OFFSET $" + itos(argIdx+1)
-	args = append(args, params.PerPage, offset)
+	query := `SELECT w.id, w.word, w.pronunciation, w.ipa, w.meaning, w.part_of_speech,
+	       w.example_sentences, w.cefr_level, w.tags, w.created_at, w.updated_at,
+	       s.band, s.times_reviewed, s.last_reviewed_at, s.next_review_at
+	FROM words w
+	LEFT JOIN srs_states s ON s.word_id = w.id AND s.user_id = w.user_id
+	WHERE ` + strings.Join(where, " AND ") + `
+	ORDER BY w.` + params.SortBy + " " + params.SortDir + `
+	LIMIT ` + limitArg + ` OFFSET ` + offsetArg
 
-	var words []model.WordWithSRS
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
+	words := make([]model.WordWithSRS, 0)
 	for rows.Next() {
 		var w model.WordWithSRS
 		err := rows.Scan(
-			&w.ID, &w.Word, &w.Pronunciation, &w.IPA, &w.Meaning, &w.PartOfSpeech,
-			&w.ExampleSentences, &w.CEFRLevel, &w.Tags, &w.CreatedAt, &w.UpdatedAt,
-			&w.SRSBand, &w.TimesReviewed, &w.SRSLastReview, &w.SRSNextReview,
+			&w.ID, &w.Word, &w.Pronunciation, &w.IPA, &w.Meaning,
+			&w.PartOfSpeech, &w.ExampleSentences, &w.CEFRLevel, &w.Tags,
+			&w.CreatedAt, &w.UpdatedAt, &w.SRSBand, &w.TimesReviewed,
+			&w.SRSLastReview, &w.SRSNextReview,
 		)
 		if err != nil {
 			return nil, err
 		}
 		words = append(words, w)
 	}
-	if err = rows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	meta := struct {
-		Page    int `json:"page"`
-		PerPage int `json:"per_page"`
-		Total   int `json:"total"`
-	}{
-		Page:    params.Page,
-		PerPage: params.PerPage,
-		Total:   total,
-	}
-
-	return &WordListResponse{
+	resp := &WordListResponse{
 		Words: words,
-		Meta:  meta,
-	}, nil
+		Meta: struct {
+			Page    int `json:"page"`
+			PerPage int `json:"per_page"`
+			Total   int `json:"total"`
+		}{
+			Page:    params.Page,
+			PerPage: params.PerPage,
+			Total:   total,
+		},
+	}
+	return resp, nil
 }
 
 func (s *WordService) Get(ctx context.Context, userID, wordID string) (*model.WordWithSRS, error) {
-	var w model.WordWithSRS
+	word := &model.WordWithSRS{}
 	err := s.pool.QueryRow(ctx, `
 		SELECT w.id, w.word, w.pronunciation, w.ipa, w.meaning, w.part_of_speech,
-			w.example_sentences, w.cefr_level, w.tags, w.created_at, w.updated_at,
-			COALESCE(s.band, 'new'), COALESCE(s.times_reviewed, 0),
-			s.last_reviewed_at, s.next_review_at
+		       w.example_sentences, w.cefr_level, w.tags, w.created_at, w.updated_at,
+		       s.band, s.times_reviewed, s.last_reviewed_at, s.next_review_at
 		FROM words w
 		LEFT JOIN srs_states s ON s.word_id = w.id AND s.user_id = w.user_id
 		WHERE w.id = $1 AND w.user_id = $2 AND w.deleted_at IS NULL`,
 		wordID, userID,
 	).Scan(
-		&w.ID, &w.Word, &w.Pronunciation, &w.IPA, &w.Meaning, &w.PartOfSpeech,
-		&w.ExampleSentences, &w.CEFRLevel, &w.Tags, &w.CreatedAt, &w.UpdatedAt,
-		&w.SRSBand, &w.TimesReviewed, &w.SRSLastReview, &w.SRSNextReview,
+		&word.ID, &word.Word, &word.Pronunciation, &word.IPA, &word.Meaning,
+		&word.PartOfSpeech, &word.ExampleSentences, &word.CEFRLevel, &word.Tags,
+		&word.CreatedAt, &word.UpdatedAt, &word.SRSBand, &word.TimesReviewed,
+		&word.SRSLastReview, &word.SRSNextReview,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -243,7 +251,7 @@ func (s *WordService) Get(ctx context.Context, userID, wordID string) (*model.Wo
 		}
 		return nil, err
 	}
-	return &w, nil
+	return word, nil
 }
 
 func (s *WordService) Update(ctx context.Context, userID, wordID string, input UpdateWordInput) (*model.WordWithSRS, error) {
@@ -258,7 +266,7 @@ func (s *WordService) Update(ctx context.Context, userID, wordID string, input U
 
 	if input.Word != nil {
 		var exists bool
-		err := s.pool.QueryRow(ctx,
+		err = s.pool.QueryRow(ctx,
 			"SELECT EXISTS(SELECT 1 FROM words WHERE user_id=$1 AND word=$2 AND id != $3 AND deleted_at IS NULL)",
 			userID, *input.Word, wordID,
 		).Scan(&exists)
@@ -320,7 +328,7 @@ func (s *WordService) Update(ctx context.Context, userID, wordID string, input U
 	}
 
 	setClauses = append(setClauses, "updated_at=NOW()")
-	query := "UPDATE words SET " + strings.Join(setClauses, ", ") + " WHERE id=$" + itos(argIdx)
+	query := "UPDATE words SET " + strings.Join(setClauses, ", ") + " WHERE id=$"+itos(argIdx)
 	args = append(args, wordID)
 
 	_, err = s.pool.Exec(ctx, query, args...)
@@ -384,7 +392,7 @@ func (s *WordService) Import(ctx context.Context, userID string, file multipart.
 		}
 
 		var wordID string
-		err := tx.QueryRow(ctx, `
+		err = tx.QueryRow(ctx, `
 			INSERT INTO words (user_id, word, pronunciation, ipa, meaning, part_of_speech,
 			                   example_sentences, cefr_level, tags)
 			VALUES ($1, $2, '', '', $3, $4, $5, $6, '{}')
@@ -403,7 +411,7 @@ func (s *WordService) Import(ctx context.Context, userID string, file multipart.
 		result.Imported++
 	}
 
-	if err = tx.Commit(ctx); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
