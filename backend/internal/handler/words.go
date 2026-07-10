@@ -27,7 +27,7 @@ func (h *WordHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.Word == "" || input.Meaning == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Word and meaning are required")
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Word and meaning required")
 		return
 	}
 
@@ -152,7 +152,7 @@ func (h *WordHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	file, _, err := r.FormFile("csv")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "CSV file is required")
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "CSV file required")
 		return
 	}
 	defer file.Close()
