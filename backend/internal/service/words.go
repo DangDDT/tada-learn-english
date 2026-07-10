@@ -15,7 +15,7 @@ import (
 
 var (
 	ErrWordNotFound  = errors.New("word not found")
-	ErrWordDuplicate = errors.New("word already exists")
+	ErrWordDuplicate = errors.New("word exists")
 )
 
 type WordService struct {
@@ -49,15 +49,15 @@ type UpdateWordInput struct {
 }
 
 type WordListParams struct {
-	UserID   string
-	Query    string
+	UserID    string
+	Query     string
 	CEFRLevel string
-	SRSBand  string
-	Tag      string
-	SortBy   string
-	SortDir  string
-	Page     int
-	PerPage  int
+	SRSBand   string
+	Tag       string
+	SortBy    string
+	SortDir   string
+	Page      int
+	PerPage   int
 }
 
 type WordListResponse struct {
@@ -70,8 +70,8 @@ type WordListResponse struct {
 }
 
 type ImportResult struct {
-	Imported int             `json:"imported"`
-	Skipped  int             `json:"skipped"`
+	Imported int              `json:"imported"`
+	Skipped  int              `json:"skipped"`
 	Errors   []ImportErrorRow `json:"errors"`
 }
 
@@ -121,14 +121,13 @@ func (s *WordService) Create(ctx context.Context, userID string, input CreateWor
 		return nil, err
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	if err = tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 	return word, nil
 }
 
 func (s *WordService) List(ctx context.Context, params WordListParams) (*WordListResponse, error) {
-	// Build dynamic query
 	where := []string{"w.user_id = $1", "w.deleted_at IS NULL"}
 	args := []interface{}{params.UserID}
 	argIdx := 2
@@ -154,7 +153,6 @@ func (s *WordService) List(ctx context.Context, params WordListParams) (*WordLis
 		argIdx++
 	}
 
-	// Count total
 	var total int
 	countQuery := "SELECT COUNT(*) FROM words w LEFT JOIN srs_states s ON s.word_id = w.id AND s.user_id = w.user_id WHERE " + strings.Join(where, " AND ")
 	err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
@@ -162,7 +160,6 @@ func (s *WordService) List(ctx context.Context, params WordListParams) (*WordLis
 		return nil, err
 	}
 
-	// Sort
 	sortBy := "w.created_at"
 	sortDir := "DESC"
 	if params.SortBy == "word" {
@@ -182,25 +179,16 @@ func (s *WordService) List(ctx context.Context, params WordListParams) (*WordLis
 	}
 	offset := (params.Page - 1) * params.PerPage
 
-	// Fetch
-	query := `SELECT w.id, w.word, w.pronunciation, w.ipa, w.meaning, w.part_of_speech,
-	                  w.example_sentences, w.cefr_level, w.tags, w.created_at, w.updated_at,
-	                  COALESCE(s.band, 'new'), COALESCE(s.times_reviewed, 0),
-	                  s.last_reviewed_at, s.next_review_at
-	           FROM words w
-	           LEFT JOIN srs_states s ON s.word_id = w.id AND s.user_id = w.user_id
-	           WHERE ` + strings.Join(where, " AND ") +
-	           ` ORDER BY ` + sortBy + ` ` + sortDir +
-	           ` LIMIT $` + itos(argIdx) + ` OFFSET $` + itos(argIdx+1)
+	query := "SELECT w.id, w.word, w.pronunciation, w.ipa, w.meaning, w.part_of_speech,\n\t\tw.example_sentences, w.cefr_level, w.tags, w.created_at, w.updated_at,\n\t\tCOALESCE(s.band, 'new'), COALESCE(s.times_reviewed, 0),\n\t\ts.last_reviewed_at, s.next_review_at\n\t\tFROM words w\n\t\tLEFT JOIN srs_states s ON s.word_id = w.id AND s.user_id = w.user_id\n\t\tWHERE " + strings.Join(where, " AND ") + "\n\t\tORDER BY " + sortBy + " " + sortDir + "\n\t\tLIMIT $" + itos(argIdx) + " OFFSET $" + itos(argIdx+1)
 	args = append(args, params.PerPage, offset)
 
+	var words []model.WordWithSRS
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	words := []model.WordWithSRS{}
 	for rows.Next() {
 		var w model.WordWithSRS
 		err := rows.Scan(
@@ -213,28 +201,31 @@ func (s *WordService) List(ctx context.Context, params WordListParams) (*WordLis
 		}
 		words = append(words, w)
 	}
-
-	if words == nil {
-		words = []model.WordWithSRS{}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return &WordListResponse{
 		Words: words,
 		Meta: struct {
-			Page    int `json:"page"`
-			PerPage int `json:"per_page"`
-			Total   int `json:"total"`
-		}{Page: params.Page, PerPage: params.PerPage, Total: total},
+			Page    int ` + "`" + `json:"page"` + "`" + `
+			PerPage int ` + "`" + `json:"per_page"` + "`" + `
+			Total   int ` + "`" + `json:"total"` + "`" + `
+		}{
+			Page:    params.Page,
+			PerPage: params.PerPage,
+			Total:   total,
+		},
 	}, nil
 }
 
 func (s *WordService) Get(ctx context.Context, userID, wordID string) (*model.WordWithSRS, error) {
-	w := &model.WordWithSRS{}
+	var w model.WordWithSRS
 	err := s.pool.QueryRow(ctx, `
 		SELECT w.id, w.word, w.pronunciation, w.ipa, w.meaning, w.part_of_speech,
-		       w.example_sentences, w.cefr_level, w.tags, w.created_at, w.updated_at,
-		       COALESCE(s.band, 'new'), COALESCE(s.times_reviewed, 0),
-		       s.last_reviewed_at, s.next_review_at
+			w.example_sentences, w.cefr_level, w.tags, w.created_at, w.updated_at,
+			COALESCE(s.band, 'new'), COALESCE(s.times_reviewed, 0),
+			s.last_reviewed_at, s.next_review_at
 		FROM words w
 		LEFT JOIN srs_states s ON s.word_id = w.id AND s.user_id = w.user_id
 		WHERE w.id = $1 AND w.user_id = $2 AND w.deleted_at IS NULL`,
@@ -250,7 +241,7 @@ func (s *WordService) Get(ctx context.Context, userID, wordID string) (*model.Wo
 		}
 		return nil, err
 	}
-	return w, nil
+	return &w, nil
 }
 
 func (s *WordService) Update(ctx context.Context, userID, wordID string, input UpdateWordInput) (*model.WordWithSRS, error) {
@@ -368,7 +359,7 @@ func (s *WordService) Import(ctx context.Context, userID string, file multipart.
 	result := &ImportResult{}
 	for i, record := range records {
 		if i == 0 {
-			continue // skip header
+			continue
 		}
 		if len(record) < 2 {
 			result.Errors = append(result.Errors, ImportErrorRow{Row: i + 1, Error: "invalid format: need at least word and meaning"})
@@ -410,7 +401,7 @@ func (s *WordService) Import(ctx context.Context, userID string, file multipart.
 		result.Imported++
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	if err = tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
